@@ -1,0 +1,42 @@
+
+# region imports
+from AlgorithmImports import *
+# endregion
+
+class CrawlingTanFlamingo(QCAlgorithm):
+
+    def initialize(self):
+        self.set_start_date(2024, 2, 4)
+        self.set_end_date(2025,1,1)
+        self.set_cash(100000)
+
+        self.symbol=self.add_equity("SPY",Resolution.MINUTE).symbol
+
+        self.rollingwindow=RollingWindow[TradeBar](2)
+        #self.subscription_manager.add_consolidator(self.symbol,Resolution.DAILY,self.CustomBarHandler)
+        consolidator=TradeBarConsolidator(timedelta(days=1))
+        consolidator.data_consolidated+=self.CustomBarHandler
+        self.subscription_manager.add_consolidator(self.symbol,consolidator)
+        self.schedule.on(self.date_rules.every_day(self.symbol),self.time_rules.before_market_close(self.symbol,15),self.exitpositions)
+
+        
+
+    def on_data(self, data: Slice):
+        if not self.rollingwindow.is_ready:
+            return
+
+        if not (self.time.hour==9 and self.time.minute==31):
+            return
+        
+        if data[self.symbol].open>=1.01*self.rollingwindow[0].close:  #most recent data appears in beginning of the list
+            self.set_holdings(self.symbol,-1)
+        
+        elif data[self.symbol].open<=0.99*self.rollingwindow[0].close:
+            self.set_holdings(self.symbol,1)
+
+    
+    def CustomBarHandler(self,sender,bar):
+        self.rollingwindow.add(bar)
+
+    def exitpositions(self):
+        self.liquidate(self.symbol)#we create this method like this, there will be liquidation iif we have a posoitin
