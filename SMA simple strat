@@ -1,0 +1,74 @@
+# region imports
+from collections import deque
+from AlgorithmImports import *
+from QuantConnect.Indicators import SimpleMovingAverage
+# endregion
+#the strategy is to check if there is an uptrend or a downtrend, if the indicator is above or below
+#the graph, we enter a short if its a 52 week high and a uptrend et vice versa
+class CreativeFluorescentYellowHippopotamus(QCAlgorithm):
+
+    def Initialize(self):
+        self.set_start_date(2024,2,2)
+        self.set_end_date(2025,7,2)
+        self.set_cash(100000)
+        self.spy=self.add_equity("SPY",Resolution.DAILY).symbol
+
+        """self.sma = self.SMA(self.spy, 30, Resolution.DAILY)
+        self.Debug(f"SMA type: {type(self.sma)}")
+        closing_prices=self.history(self.spy,30,Resolution.DAILY) # pump historical data into sma not to wait its the 30 last days
+        for time, row in closing_prices.loc[self.spy].iterrows():
+            price = row["close"]
+            self.sma.Update(IndicatorDataPoint(time, price))  """
+
+        self.sma=CustomSMA("CustomSMA",30)
+        self.register_indicator(self.spy,self.sma,Resolution.DAILY)
+
+
+
+    def on_data(self, data: Slice):
+        if not self.sma.IsReady:
+            return 
+        
+        hist=self.history(self.spy,timedelta(365),Resolution.DAILY)
+        low=min(hist["low"])
+        high=max(hist["high"])#not efficient because updates every day use rolling window instead
+
+        price=self.securities[self.spy].price
+
+        if price*1.03>=high and self.sma.current.value<price:
+            if not self.portfolio[self.spy].is_long: #check if there is not already an open position on SPY
+                self.set_holdings(self.spy,1)
+
+        
+        elif price*0.97<=low and self.sma.current.value>price:
+            if not self.portfolio[self.spy].is_short:
+                self.set_holdings(self.spy,-1)
+
+        else:
+            self.liquidate() # does nothing if there is no position
+
+        self.plot("Benchmark","52 week-high", high)
+        self.plot("Benchmark","52 week-low", low)
+        self.plot("Benchmark","SMA", self.sma.current.value)
+
+class CustomSMA(PythonIndicator):# create our own indicator
+    def __init__(self,name,period):
+        self.Name=name
+        self.time=DateTime.minute
+        self.Value=0
+        self.queue=deque(maxlen=period)#number of period
+    def update(self,input):
+        self.queue.appendleft(input.Close)
+        self.time=input.endtime
+        count=len(self.queue)
+        self.Value=sum(self.queue)/count
+        return count==self.queue.maxlen
+
+
+
+        
+
+
+
+        
+       
