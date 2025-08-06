@@ -1,0 +1,49 @@
+# region imports
+from AlgorithmImports import *
+# endregion
+
+class EnergeticGreenSnake(QCAlgorithm):
+
+    def initialize(self): #all specifications of the algo is here 
+        self.set_start_date(2023, 1, 29)
+        self.set_end_date(2024,12,10)
+        self.set_cash(100000)
+
+        spy = self.add_equity("SPY", Resolution.DAILY ) #new data is handled every 'resolution'
+
+        spy.SetDataNormalizationMode(DataNormalizationMode.Raw) #not necessary
+
+        self.spy=spy.symbol #symbole cest le long truc
+
+        self.set_benchmark("SPY") 
+
+        self.set_brokerage_model(BrokerageName.INTERACTIVE_BROKERS_BROKERAGE, AccountType.MARGIN) #cash account cant be used for leverage margin 2-4x leverage
+
+        self.entryprice=0
+        self.period = timedelta(31)
+        self.nextentrytime=self.time
+   
+
+    def on_data(self, data: Slice): # handles how the new data is processed 
+        if not self.spy in data :
+            return 
+        #price=data.bars[self.spy].close
+        if data[self.spy] is None:
+            return
+        price=data[self.spy].Close
+        #price=self.Securities[self.spy].Close
+        #the data is added only if it is not already added
+
+        if not self.portfolio.invested: #check if there is not already a position
+            if self.nextentrytime<=self.time:
+                #self.SetHoldings(self.spy,1) equivalent to the next line, 1 means 100%
+                self.market_order(self.spy,int(self.portfolio.cash/price))
+                self.log("Buy SPY @" +str(price))
+                self.entryPrice = price  
+
+        elif self.entryPrice *1.1< price or self.entryprice*0.9>price:
+            self.liquidate() #liquidate every position in the portfolio
+            self.log("SELL SPY @" +str(price))
+            self.nextentrytime = self.time +self.period
+
+
